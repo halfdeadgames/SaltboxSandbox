@@ -1,24 +1,45 @@
 #########################################################################
-# Title:            Sandbox: Stash                                      #
-# Author(s):        -SK, kowalski                                       #
-# URL:              https://github.com/saltyorg/Sandbox                 #
+# Title:         Sandbox: Watchower Role                                #
+# Author(s):     l3uddz, salty, halfdeadgames                           #
+# URL:           https://github.com/saltyorg/Sandbox                    #
 # --                                                                    #
 #########################################################################
 #                   GNU General Public License v3.0                     #
 #########################################################################
 ---
-- name: Add DNS record
-  ansible.builtin.include_tasks: "{{ resources_tasks_path }}/dns/tasker.yml"
-  vars:
-    dns_record: "{{ lookup('vars', role_name + '_dns_record') }}"
-    dns_zone: "{{ lookup('vars', role_name + '_dns_zone') }}"
-    dns_proxy: "{{ lookup('vars', role_name + '_dns_proxy') }}"
-
 - name: Remove existing Docker container
   ansible.builtin.include_tasks: "{{ resources_tasks_path }}/docker/remove_docker_container.yml"
 
 - name: Create directories
   ansible.builtin.include_tasks: "{{ resources_tasks_path }}/directories/create_directories.yml"
+
+- name: "Check if watchtower.env file exists"
+  ansible.builtin.stat:
+    path: "/opt/watchtower/watchtower.env"
+  register: watchtower_env
+
+- name: "Import watchtower.env if it doesnt exist"
+  ansible.builtin.template:
+    src: watchtower.env.j2
+    dest: /opt/watchtower/watchtower.env
+    force: yes
+    owner: "{{ user.name }}"
+    group: "{{ user.name }}"
+    mode: 0775
+  when: not watchtower_env.stat.exists
+
+- name: Get env file content
+  slurp:
+    src: /opt/watchtower/watchtower.env
+  register: env_file_content
+
+- name: Parse environment
+  set_fact:
+    watchtower_env_file_vars: "{{ ('{' + (env_file_content.content | b64decode).split('\n') | select | map('regex_replace', '([^=]*)=(.*)', '\"\\1\": \"\\2\"') | join(',') + '}') | from_json }}"
+
+- name: "Loaded the following environmental variables from /opt/watchtower/watchtower.env"
+  debug:
+    msg: "{{ watchtower_env_file_vars }}"
 
 - name: Create Docker container
   ansible.builtin.include_tasks: "{{ resources_tasks_path }}/docker/create_docker_container.yml"
