@@ -1,66 +1,24 @@
 #########################################################################
-# Title:         Sandbox: Watchower Role                                #
-# Author(s):     l3uddz, salty                                          #
-# URL:           https://github.com/saltyorg/Sandbox                    #
+# Title:            Sandbox: Stash                                      #
+# Author(s):        -SK, kowalski                                       #
+# URL:              https://github.com/saltyorg/Sandbox                 #
 # --                                                                    #
 #########################################################################
 #                   GNU General Public License v3.0                     #
 #########################################################################
 ---
-- name: Stop and remove any existing container
-  community.docker.docker_container:
-    name: watchtower
-    container_default_behavior: compatibility
-    state: absent
-    tls_hostname: localhost
+- name: Add DNS record
+  ansible.builtin.include_tasks: "{{ resources_tasks_path }}/dns/tasker.yml"
+  vars:
+    dns_record: "{{ lookup('vars', role_name + '_dns_record') }}"
+    dns_zone: "{{ lookup('vars', role_name + '_dns_zone') }}"
+    dns_proxy: "{{ lookup('vars', role_name + '_dns_proxy') }}"
 
-- name: Create watchtower directories
-  ansible.builtin.file:
-    path: "{{ item }}"
-    state: directory
-    mode: "0775"
-    owner: "{{ user.name }}"
-    group: "{{ user.name }}"
-    recurse: yes
-  with_items:
-    - /opt/watchtower
+- name: Remove existing Docker container
+  ansible.builtin.include_tasks: "{{ resources_tasks_path }}/docker/remove_docker_container.yml"
 
-- name: "Check if watchtower.env file exists"
-  ansible.builtin.stat:
-    path: "/opt/watchtower/watchtower.env"
-  register: watchtower_env
+- name: Create directories
+  ansible.builtin.include_tasks: "{{ resources_tasks_path }}/directories/create_directories.yml"
 
-- name: "Import watchtower.env if it doesnt exist"
-  ansible.builtin.template:
-    src: watchtower.env.j2
-    dest: /opt/watchtower/watchtower.env
-    force: yes
-    owner: "{{ user.name }}"
-    group: "{{ user.name }}"
-    mode: 0775
-  when: not watchtower_env.stat.exists
-
-- name: Create container
-  community.docker.docker_container:
-    name: watchtower
-    image: "containrrr/watchtower"
-    pull: yes
-    command_handling: compatibility
-    container_default_behavior: compatibility
-    default_host_ip: ""
-    env_file: /opt/watchtower/watchtower.env
-    volumes:
-      - "/var/run/docker.sock:/var/run/docker.sock"
-    labels:
-      "com.github.saltbox.saltbox_managed": "true"
-    network_mode: "saltbox"
-    networks_cli_compatible: true
-    networks:
-      - name: saltbox
-        aliases:
-          - watchtower
-    comparisons:
-      '*': ignore
-    state: started
-    tls_hostname: localhost
-    restart_policy: unless-stopped
+- name: Create Docker container
+  ansible.builtin.include_tasks: "{{ resources_tasks_path }}/docker/create_docker_container.yml"
